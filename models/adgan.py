@@ -325,7 +325,7 @@ class TransferModel(BaseModel):
 
         fake_p2 = util.tensor2im(self.fake_p2.data)
 
-        vis = np.zeros((height, width*5, 3)).astype(np.uint8) #h, w, c
+        vis = np.ones((height, width*5, 3)).astype(np.uint8) #h, w, c
         vis[:, :width, :] = input_P1
         vis[:, width:width*2, :] = input_BP1
         vis[:, width*2:width*3, :] = input_P2

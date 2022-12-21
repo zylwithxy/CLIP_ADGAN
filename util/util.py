@@ -9,6 +9,7 @@ import collections
 
 # from skimage.draw import circle, line_aa, polygon
 from skimage.draw import ellipse, line_aa, polygon
+import matplotlib.pyplot as plt
 
 # Converts a Tensor into a Numpy array
 # |imtype|: the desired type of the converted numpy array
@@ -103,9 +104,21 @@ def diagnose_network(net, name='network'):
     print(mean)
 
 
-def save_image(image_numpy, image_path):
+def save_image(image_numpy, image_path, txt:str):
     image_pil = Image.fromarray(image_numpy)
-    image_pil.save(image_path)
+    # image_pil.save(image_path)
+    plt.imshow(image_pil)
+    plt.xlabel(txt)
+    
+    # Hide the axis.
+    cur_axe = plt.gca()
+    cur_axe.axes.get_xaxis().set_ticks([])
+    cur_axe.axes.get_yaxis().set_ticks([])
+    
+    DPI = 400
+    bbox_choice = 'tight'
+    
+    plt.savefig(image_path, dpi= 300, bbox_inches= bbox_choice)
 
 def info(object, spacing=10, collapse=1):
     """Print methods and doc strings.
