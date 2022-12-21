@@ -19,7 +19,7 @@ class L1_plus_perceptualLoss(nn.Module):
 
         # vgg = models.vgg19(pretrained=True).features
         vgg19 = models.vgg19(pretrained=False)
-        vgg19.load_state_dict(torch.load('/home1/menyf/data/deepfashion/vgg19-dcbb9e9d.pth'))
+        vgg19.load_state_dict(torch.load('/media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_transfer_codes/deepfashion/vgg19-dcbb9e9d.pth'))
         vgg = vgg19.features
 
 

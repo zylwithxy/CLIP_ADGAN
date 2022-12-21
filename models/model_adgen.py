@@ -30,16 +30,28 @@ class ADGen(nn.Module):
         # fusion module
         self.mlp = MLP(style_dim, self.get_num_adain_params(self.dec), mlp_dim, 3, norm='none', activ=activ)
 
-    def forward(self, img_A, img_B, sem_B):
+    def forward(self, img_A, img_B, input_TXT):
         # reconstruct an image
+        """Params
 
-        content = self.enc_content(img_A)
-        style = self.enc_style(img_B, sem_B)
-        style = self.fc(style.view(style.size(0), -1))
-        style = torch.unsqueeze(style, 2)
-        style = torch.unsqueeze(style, 3)
+        Args:
+            img_A (_type_): [b, 18, 256, 176]
+            img_B (_type_): [b, 3, 256, 176]
+            # sem_B (_type_): [b, 8, 256, 176]
+            
 
-        images_recon = self.decode(content, style)
+        Returns:
+            _type_: _description_
+        """
+
+        content = self.enc_content(img_A) # [b,  256, 64, 44]
+        # style = self.enc_style(img_B, sem_B)
+        # style = self.fc(style.view(style.size(0), -1))
+        style = torch.unsqueeze(input_TXT, 2)
+        style = torch.unsqueeze(style, 3) # [b,  512, 1, 1]
+
+        images_recon = self.decode(content, style) # [b, 3, 256, 176]
+        # import pdb; pdb.set_trace()
         return images_recon
 
     def decode(self, content, style):
@@ -75,7 +87,7 @@ class VggStyleEncoder(nn.Module):
         super(VggStyleEncoder, self).__init__()
         # self.vgg = models.vgg19(pretrained=True).features
         vgg19 = models.vgg19(pretrained=False)
-        vgg19.load_state_dict(torch.load('/home1/menyf/data/deepfashion/vgg19-dcbb9e9d.pth'))
+        vgg19.load_state_dict(torch.load('/media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_transfer_codes/deepfashion/vgg19-dcbb9e9d.pth'))
         self.vgg = vgg19.features
 
         for param in self.vgg.parameters():
@@ -227,7 +239,7 @@ class Conv2dBlock(nn.Module):
         self.use_bias = True
         # initialize padding
         if pad_type == 'reflect':
-            self.pad = nn.ReflectionPad2d(padding)
+            self.pad = nn.ReflectionPad2d(padding) # length + 2 * padding
         elif pad_type == 'replicate':
             self.pad = nn.ReplicationPad2d(padding)
         elif pad_type == 'zero':

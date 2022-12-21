@@ -9,10 +9,10 @@ from . import html
 class Visualizer():
     def __init__(self, opt):
         # self.opt = opt
-        self.display_id = opt.display_id
-        self.use_html = opt.isTrain and not opt.no_html
-        self.win_size = opt.display_winsize
-        self.name = opt.name
+        self.display_id = opt.display_id # 0
+        self.use_html = opt.isTrain and not opt.no_html # True and not False(store_true)
+        self.win_size = opt.display_winsize # 256
+        self.name = opt.name # fashion_adgan_test
         self.opt = opt
         self.saved = False
         if self.display_id > 0:
@@ -20,7 +20,7 @@ class Visualizer():
             self.vis = visdom.Visdom(port=opt.display_port)
 
         if self.use_html:
-            self.web_dir = os.path.join(opt.checkpoints_dir, opt.name, 'web')
+            self.web_dir = os.path.join(opt.checkpoints_dir, opt.name, 'web') # ./checkpoints_gpu012_new The root of file
             self.img_dir = os.path.join(self.web_dir, 'images')
             print('create web directory %s...' % self.web_dir)
             util.mkdirs([self.web_dir, self.img_dir])
@@ -33,7 +33,8 @@ class Visualizer():
         self.saved = False
 
     # |visuals|: dictionary of images to display or save
-    def display_current_results(self, visuals, epoch, save_result):
+    def display_current_results(self, visuals, epoch, save_result, txt: str):
+        visuals: dict[str, np.ndarray]; epoch: int; save_result: bool # shape: (height, width*5, 3)
         if self.display_id > 0:  # show images in the browser
             ncols = self.opt.display_single_pane_ncols
             if ncols > 0:

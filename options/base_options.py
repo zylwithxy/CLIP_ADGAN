@@ -58,6 +58,11 @@ class BaseOptions():
         self.parser.add_argument('--G_n_downsampling', type=int, default=2, help='down-sampling blocks for generator')
         self.parser.add_argument('--D_n_downsampling', type=int, default=2, help='down-sampling blocks for discriminator')
 
+        # Add Text2Human Params
+        self.parser.add_argument('--img_dir', required=True, help='path to processed_dataset/train_images')
+        self.parser.add_argument('--pose_dir', required=True, help='path to processed_dataset/densepose')
+        self.parser.add_argument('--segm_dir', required=True, help='path to processed_dataset/segm')
+        
         self.initialized = True
 
     def parse(self):

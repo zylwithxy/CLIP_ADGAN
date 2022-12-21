@@ -14,7 +14,7 @@ class BaseDataset(data.Dataset):
 
 def get_transform(opt):
     transform_list = []
-    if opt.resize_or_crop == 'resize_and_crop':
+    if opt.resize_or_crop == 'resize_and_crop': # In script, the resize_or_crop == no
         osize = [opt.loadSize, opt.loadSize]
         transform_list.append(transforms.Scale(osize, Image.BICUBIC))
         transform_list.append(transforms.RandomCrop(opt.fineSize))
@@ -29,7 +29,7 @@ def get_transform(opt):
         transform_list.append(transforms.RandomCrop(opt.fineSize))
 
     transform_list += [transforms.ToTensor(),
-                       transforms.Normalize((0.5, 0.5, 0.5),
+                       transforms.Normalize((0.5, 0.5, 0.5), # does not support tensor shape; mean and std for each channel
                                             (0.5, 0.5, 0.5))]
     return transforms.Compose(transform_list)
 

@@ -13,6 +13,9 @@ from losses.L1_plus_perceptualLoss import L1_plus_perceptualLoss
 from losses.CX_style_loss import CXLoss
 from .vgg import VGG
 
+import sys
+sys.path.append('..')
+import clip
 
 class TransferModel(BaseModel):
     def name(self):
@@ -22,12 +25,12 @@ class TransferModel(BaseModel):
         BaseModel.initialize(self, opt)
 
         nb = opt.batchSize
-        size = opt.fineSize
-        self.input_P1_set = self.Tensor(nb, opt.P_input_nc, size, size)
-        self.input_BP1_set = self.Tensor(nb, opt.BP_input_nc, size, size)
+        size = opt.fineSize # 256
+        self.input_P1_set = self.Tensor(nb, opt.P_input_nc, size, size) # (2, 3, 256, 256)
+        self.input_BP1_set = self.Tensor(nb, opt.BP_input_nc, size, size) # (2, 18, 256, 256)
         self.input_P2_set = self.Tensor(nb, opt.P_input_nc, size, size)
         self.input_BP2_set = self.Tensor(nb, opt.BP_input_nc, size, size)
-        self.input_SP1_set = self.Tensor(nb, opt.SP_input_nc, size, size)
+        # self.input_SP1_set = self.Tensor(nb, opt.SP_input_nc, size, size) # (2, 8, 256, 256)
 
         input_nc = [opt.P_input_nc, opt.BP_input_nc+opt.BP_input_nc]
         self.netG = networks.define_G(input_nc, opt.P_input_nc,
@@ -82,7 +85,7 @@ class TransferModel(BaseModel):
             elif opt.L1_type == 'l1_plus_perL1':
                 self.criterionL1 = L1_plus_perceptualLoss(opt.lambda_A, opt.lambda_B, opt.perceptual_layers, self.gpu_ids, opt.percep_is_l1)
             else:
-                raise Excption('Unsurportted type of L1!')
+                raise Exception('Unsurportted type of L1!')
 
             if opt.use_cxloss:
                 self.CX_loss = CXLoss(sigma=0.5)
@@ -133,8 +136,10 @@ class TransferModel(BaseModel):
         self.input_P2_set.resize_(input_P2.size()).copy_(input_P2)
         self.input_BP2_set.resize_(input_BP2.size()).copy_(input_BP2)
 
-        input_SP1 = input['SP1']
-        self.input_SP1_set.resize_(input_SP1.size()).copy_(input_SP1)
+        #input_SP1 = input['SP1']
+        # self.input_SP1_set.resize_(input_SP1.size()).copy_(input_SP1)
+        self.input_TXT1 = input['TXT1'] # str. just the text.
+        self.attr_embedder, _ = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')        
 
         self.image_paths = input['P1_path'][0] + '___' + input['P2_path'][0]
         self.person_paths = input['P1_path'][0]
@@ -147,9 +152,12 @@ class TransferModel(BaseModel):
         self.input_P2 = Variable(self.input_P2_set)
         self.input_BP2 = Variable(self.input_BP2_set)
 
-        self.input_SP1 = Variable(self.input_SP1_set)
+        # self.input_SP1 = Variable(self.input_SP1_set)
+        text = clip.tokenize(self.input_TXT1).cuda()
+        input_TXT1 = self.attr_embedder.encode_text(text)
+        input_TXT1 = input_TXT1.float()
 
-        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, self.input_SP1)
+        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, input_TXT1)
 
 
 
@@ -160,7 +168,7 @@ class TransferModel(BaseModel):
         self.input_P2 = Variable(self.input_P2_set)
         self.input_BP2 = Variable(self.input_BP2_set)
 
-        self.input_SP1 = Variable(self.input_SP1_set)
+        # self.input_SP1 = Variable(self.input_SP1_set)
 
         self.fake_p2 = self.netG(self.input_BP2, self.input_P1, self.input_SP1)
 
@@ -326,7 +334,7 @@ class TransferModel(BaseModel):
 
         ret_visuals = OrderedDict([('vis', vis)])
 
-        return ret_visuals
+        return ret_visuals, self.input_TXT1[0] # [0] is due to the tensor2im choose the batch[0].
 
 
     def save(self, label):

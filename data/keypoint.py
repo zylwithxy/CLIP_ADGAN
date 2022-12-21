@@ -9,17 +9,42 @@ import pandas as pd
 import numpy as np
 import torch
 
+import sys
+sys.path.append(os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN'))
+from read_captions import Read_MultiModel_Captions
 
 class KeyDataset(BaseDataset):
+    
+    def _open_file(self, path_prefix, fname):
+        return open(os.path.join(path_prefix, fname), 'rb')
+    
+    def _load_densepose(self, raw_idx):
+        fname = self._image_fnames[raw_idx]
+        fname = f'{fname[:-4]}_densepose.png'
+        with self._open_file(self._densepose_path, fname) as f:
+            densepose = Image.open(f)
+            if self.downsample_factor != 1:
+                width, height = densepose.size
+                width = width // self.downsample_factor
+                height = height // self.downsample_factor
+                densepose = densepose.resize(
+                    size=(width, height), resample=Image.NEAREST)
+            # channel-wise IUV order, [3, H, W]
+            densepose = np.array(densepose)[:, :, 2:].transpose(2, 0, 1)
+        return densepose.astype(np.float32)
+    
     def initialize(self, opt):
         self.opt = opt
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
-        self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') #keypoints
-        self.dir_SP = opt.dirSem #semantic
+        self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') # Densepoints
+        self.dir_SP = opt.dirSem #semantic deepfashion path
         self.SP_input_nc = opt.SP_input_nc
+        
+        text_caption = Read_MultiModel_Captions()
+        self.text_cap = text_caption.captions_adgan
 
-        self.init_categories(opt.pairLst)
+        self.init_categories(opt.pairLst) # deepmultimodal-resize-pairs-train.csv
         self.transform = get_transform(opt)
 
     def init_categories(self, pairLst):
@@ -52,14 +77,14 @@ class KeyDataset(BaseDataset):
         BP1_img = np.load(BP1_path) # h, w, c
         BP2_img = np.load(BP2_path) 
         # use flip
-        if self.opt.phase == 'train' and self.opt.use_flip:
+        if self.opt.phase == 'train' and self.opt.use_flip: # use_flip == 0
             # print ('use_flip ...')
             flip_random = random.uniform(0,1)
             
             if flip_random > 0.5:
                 # print('fliped ...')
                 P1_img = P1_img.transpose(Image.FLIP_LEFT_RIGHT)
-                P2_img = P2_img.transpose(Image.FLIP_LEFT_RIGHT)
+                P2_img = P2_img.transpose(Image.FLIP_LEFT_RIGHT) # 镜像
 
                 BP1_img = np.array(BP1_img[:, ::-1, :]) # flip
                 BP2_img = np.array(BP2_img[:, ::-1, :]) # flip
@@ -87,19 +112,20 @@ class KeyDataset(BaseDataset):
             P1 = self.transform(P1_img)
             P2 = self.transform(P2_img)
 
-        # segmentation
-        SP1_name = self.split_name(P1_name, 'semantic_merge3')
+        # segmentation ; we don't use the segmentation map.
+        """
+        SP1_name = self.split_name(P1_name, 'semantic_merge3') # 按位置分割选中 semantic_merge3 对应的pic
         SP1_path = os.path.join(self.dir_SP, SP1_name)
-        SP1_path = SP1_path[:-4] + '.npy'
+        SP1_path = SP1_path[:-4] + '.npy' # 原来的后缀是.jpg
         SP1_data = np.load(SP1_path)
-        SP1 = np.zeros((self.SP_input_nc, 256, 176), dtype='float32')
+        SP1 = np.zeros((self.SP_input_nc, 256, 176), dtype='float32') # 8通道, 每个通道对应的binary属性. e.g. head, clothes, armes etc.
         for id in range(self.SP_input_nc):
             SP1[id] = (SP1_data == id).astype('float32')
-
-        return {'P1': P1, 'BP1': BP1, 'SP1': SP1, 'P2': P2, 'BP2': BP2,
+        """
+        TXT1 = self.text_cap[P1_name]
+        
+        return {'P1': P1, 'BP1': BP1, 'TXT1': TXT1, 'P2': P2, 'BP2': BP2,
                 'P1_path': P1_name, 'P2_path': P2_name}
-
-                
 
     def __len__(self):
         if self.opt.phase == 'train':

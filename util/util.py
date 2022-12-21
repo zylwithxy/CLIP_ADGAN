@@ -7,7 +7,8 @@ import numpy as np
 import os
 import collections
 
-from skimage.draw import circle, line_aa, polygon
+# from skimage.draw import circle, line_aa, polygon
+from skimage.draw import ellipse, line_aa, polygon
 
 # Converts a Tensor into a Numpy array
 # |imtype|: the desired type of the converted numpy array
@@ -22,15 +23,15 @@ def tensor2im(image_tensor, imtype=np.uint8):
 # draw pose img
 LIMB_SEQ = [[1,2], [1,5], [2,3], [3,4], [5,6], [6,7], [1,8], [8,9],
            [9,10], [1,11], [11,12], [12,13], [1,0], [0,14], [14,16],
-           [0,15], [15,17], [2,16], [5,17]]
+           [0,15], [15,17], [2,16], [5,17]] # shape 19
 
 COLORS = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
           [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255],
-          [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+          [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]] # shape 18
 
 
 LABELS = ['nose', 'neck', 'Rsho', 'Relb', 'Rwri', 'Lsho', 'Lelb', 'Lwri',
-               'Rhip', 'Rkne', 'Rank', 'Lhip', 'Lkne', 'Lank', 'Leye', 'Reye', 'Lear', 'Rear']
+               'Rhip', 'Rkne', 'Rank', 'Lhip', 'Lkne', 'Lank', 'Leye', 'Reye', 'Lear', 'Rear'] # shape 18
 
 MISSING_VALUE = -1
 
@@ -82,7 +83,7 @@ def draw_pose_from_cords(pose_joints, img_size, radius=2, draw_joints=True):
     for i, joint in enumerate(pose_joints):
         if pose_joints[i][0] == MISSING_VALUE or pose_joints[i][1] == MISSING_VALUE:
             continue
-        yy, xx = circle(joint[0], joint[1], radius=radius, shape=img_size)
+        yy, xx = ellipse(joint[0], joint[1], radius, radius, shape=img_size)
         colors[yy, xx] = COLORS[i]
         mask[yy, xx] = True
 
