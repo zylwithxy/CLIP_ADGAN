@@ -11,7 +11,7 @@ import torchvision.models.vgg as models
 # Moddfied with AdINGen
 class ADGen(nn.Module):
     # AdaIN auto-encoder architecture
-    def __init__(self, input_dim, dim, style_dim, n_downsample, n_res, mlp_dim, activ='relu', pad_type='reflect'):
+    def __init__(self, input_dim, dim, style_dim, n_downsample, n_res, mlp_dim, activ='relu', pad_type='reflect', use_PCA: bool= False):
         super(ADGen, self).__init__()
 
         # style encoder
@@ -29,6 +29,12 @@ class ADGen(nn.Module):
 
         # fusion module
         self.mlp = MLP(style_dim, self.get_num_adain_params(self.dec), mlp_dim, 3, norm='none', activ=activ)
+        
+        # Dimension reduction module, which is used to reduce the (13, 512) dimensions to (1, 512)
+        self.use_PCA = use_PCA
+        if not use_PCA:
+            self.reduc_embeddings = nn.Conv1d(13, 1, 1)
+        
 
     def forward(self, img_A, img_B, input_TXT):
         # reconstruct an image
@@ -47,11 +53,16 @@ class ADGen(nn.Module):
         content = self.enc_content(img_A) # [b,  256, 64, 44]
         # style = self.enc_style(img_B, sem_B)
         # style = self.fc(style.view(style.size(0), -1))
-        style = torch.unsqueeze(input_TXT, 2)
-        style = torch.unsqueeze(style, 3) # [b,  512, 1, 1]
+        if self.use_PCA:
+            style = torch.unsqueeze(input_TXT, 2)
+            style = torch.unsqueeze(style, 3) # [b,  512, 1, 1]
+        else:
+            style = self.reduc_embeddings(input_TXT) # [b, 1, 512]
+            style = style.transpose(1, 2).contiguous() # [b, 512, 1]
+            style = style.unsqueeze(-1) # [b, 512, 1, 1]
 
         images_recon = self.decode(content, style) # [b, 3, 256, 176]
-        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
         return images_recon
 
     def decode(self, content, style):

@@ -16,6 +16,7 @@ from .vgg import VGG
 import sys
 sys.path.append('..')
 import clip
+from sklearn.decomposition import SparsePCA
 
 class TransferModel(BaseModel):
     def name(self):
@@ -35,8 +36,9 @@ class TransferModel(BaseModel):
         input_nc = [opt.P_input_nc, opt.BP_input_nc+opt.BP_input_nc]
         self.netG = networks.define_G(input_nc, opt.P_input_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids,
-                                        n_downsampling=opt.G_n_downsampling)
-
+                                        n_downsampling=opt.G_n_downsampling, use_PCA= opt.use_PCA)
+        self.choice = opt.choice_txt_img
+        self.use_PCA = opt.use_PCA
 
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
@@ -126,8 +128,20 @@ class TransferModel(BaseModel):
             if opt.with_D_PP:
                 networks.print_network(self.netD_PP)
         print('-----------------------------------------------')
+        
+        self.attr_embedder, _ = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')
+        # PCA cannot be implemented correctly.
+        self.pca_class_partial = SparsePCA(n_components= 40, random_state=0) # Each component (b, 1, 512) in (b, 13, 512) -> (b, 1, 40)
+        self.pca_class_overall = SparsePCA(n_components= 512, random_state=0) # (b, 520) -> (b, 512) 
 
-    def set_input(self, input):
+    def set_input(self, input:dict):
+        """_summary_
+
+        Args:
+            input (dict): Data in the keypoint dataset.
+            choice(bool): True means using the CLIP image encoder. False means use the CLIP text encoder.
+            use_PCA(bool): True means using PCA to reduce the dimension especially for the 13 attributes of CLIP text embeddings.
+        """
         input_P1, input_BP1 = input['P1'], input['BP1']
         input_P2, input_BP2 = input['P2'], input['BP2']
 
@@ -138,12 +152,13 @@ class TransferModel(BaseModel):
 
         #input_SP1 = input['SP1']
         # self.input_SP1_set.resize_(input_SP1.size()).copy_(input_SP1)
-        self.input_TXT1 = input['TXT1'] # str. just the text.
-        self.attr_embedder, _ = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')        
-
+        self.input_TXT1 = input['TXT1'] if not self.use_PCA else input['TXT1'].float().numpy() # str. just the text; tensors. 13 attributes
+        
+        if self.choice:
+            self.input_IMG1 = input['CLIP_img_input'].cuda() if self.gpu_ids else input['CLIP_img_input']  
+        
         self.image_paths = input['P1_path'][0] + '___' + input['P2_path'][0]
         self.person_paths = input['P1_path'][0]
-
 
     def forward(self):
         self.input_P1 = Variable(self.input_P1_set)
@@ -151,13 +166,24 @@ class TransferModel(BaseModel):
 
         self.input_P2 = Variable(self.input_P2_set)
         self.input_BP2 = Variable(self.input_BP2_set)
-
+        
         # self.input_SP1 = Variable(self.input_SP1_set)
-        text = clip.tokenize(self.input_TXT1).cuda()
-        input_TXT1 = self.attr_embedder.encode_text(text)
-        input_TXT1 = input_TXT1.float()
+        if not self.choice:
+            # text = clip.tokenize(self.input_TXT1).cuda()
+            # input_TXT1 = self.attr_embedder.encode_text(text)
+            if not self.use_PCA:
+                style_code = self.input_TXT1.float().to(torch.device(f'cuda:{self.gpu_ids[0]}'))
+            else:
+                # assert self.input_TXT1.__class__.__name__ == 'ndarray'
+                style_code = [self.pca_class_partial.fit_transform(self.input_TXT1[:, i, :]) for i in np.arange(13)]
+                style_code = self.pca_class_overall.fit_transform((np.concatenate(style_code, axis= 1)))
+                style_code = torch.from_numpy(style_code).cuda()
+            
+        else:
+            style_code = self.attr_embedder.encode_image(self.input_IMG1)
+            style_code = style_code.float()
 
-        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, input_TXT1)
+        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, style_code)
 
 
 
@@ -333,8 +359,10 @@ class TransferModel(BaseModel):
         vis[:, width*4:, :] = fake_p2
 
         ret_visuals = OrderedDict([('vis', vis)])
+        
+        text = 'Image embeddings' if self.choice else '13 Attributes'
 
-        return ret_visuals, self.input_TXT1[0] # [0] is due to the tensor2im choose the batch[0].
+        return ret_visuals, text # [0] is due to the tensor2im choose the batch[0].
 
 
     def save(self, label):

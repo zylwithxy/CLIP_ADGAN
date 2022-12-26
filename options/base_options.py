@@ -2,6 +2,7 @@ import argparse
 import os
 from util import util
 import torch
+import glob
 
 
 class BaseOptions():
@@ -58,11 +59,6 @@ class BaseOptions():
         self.parser.add_argument('--G_n_downsampling', type=int, default=2, help='down-sampling blocks for generator')
         self.parser.add_argument('--D_n_downsampling', type=int, default=2, help='down-sampling blocks for discriminator')
 
-        # Add Text2Human Params
-        self.parser.add_argument('--img_dir', required=True, help='path to processed_dataset/train_images')
-        self.parser.add_argument('--pose_dir', required=True, help='path to processed_dataset/densepose')
-        self.parser.add_argument('--segm_dir', required=True, help='path to processed_dataset/segm')
-        
         self.initialized = True
 
     def parse(self):
@@ -90,7 +86,14 @@ class BaseOptions():
         print('-------------- End ----------------')
 
         # save to the disk
-        expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
+        check_root = self.opt.checkpoints_dir
+        if os.path.exists(check_root):
+            root_path = os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN/ADGAN')
+            fnum = len(glob.glob(os.path.join(root_path, 'check*'))) + 1
+            check_root = self.opt.checkpoints_dir + f'_{fnum}'
+            self.opt.checkpoints_dir = check_root
+            
+        expr_dir = os.path.join(check_root, self.opt.name)
         util.mkdirs(expr_dir)
         file_name = os.path.join(expr_dir, 'opt.txt')
         with open(file_name, 'wt') as opt_file:

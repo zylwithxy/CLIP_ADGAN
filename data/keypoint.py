@@ -9,12 +9,35 @@ import pandas as pd
 import numpy as np
 import torch
 
-import sys
-sys.path.append(os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN'))
-from read_captions import Read_MultiModel_Captions
+# import sys
+# sys.path.append(os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN'))
+# sys.path.append(os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN/ADGAN'))
+# from read_captions import Read_MultiModel_Captions
+
+import clip
+from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
+
+try:
+    from torchvision.transforms import InterpolationMode
+    BICUBIC = InterpolationMode.BICUBIC
+except ImportError:
+    BICUBIC = Image.BICUBIC
 
 class KeyDataset(BaseDataset):
     
+    def _convert_image_to_rgb(self, image):
+        return image.convert("RGB")
+
+    def clip_transform(self, n_px):
+        return Compose([
+            Resize(n_px, Image.BICUBIC),
+            CenterCrop(n_px),
+            self._convert_image_to_rgb,
+            ToTensor(),
+            Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+        ])
+
+
     def _open_file(self, path_prefix, fname):
         return open(os.path.join(path_prefix, fname), 'rb')
     
@@ -38,14 +61,21 @@ class KeyDataset(BaseDataset):
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') # Densepoints
+        self.dir_TEXT = os.path.join(opt.dataroot, opt.phase + '_text') # 13 CLIP text embeddings
         self.dir_SP = opt.dirSem #semantic deepfashion path
         self.SP_input_nc = opt.SP_input_nc
+        self.gpu_ids = opt.gpu_ids
+        self.choice_txt_img = opt.choice_txt_img
         
-        text_caption = Read_MultiModel_Captions()
-        self.text_cap = text_caption.captions_adgan
+        # text_caption = Read_MultiModel_Captions()
+        # self.text_cap: dict[str, str] = text_caption.captions_adgan
 
         self.init_categories(opt.pairLst) # deepmultimodal-resize-pairs-train.csv
         self.transform = get_transform(opt)
+        self.clip_tran = self.clip_transform(224)
+        # _, preprocess = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')
+        # self.process = preprocess
+        
 
     def init_categories(self, pairLst):
         pairs_file_train = pd.read_csv(pairLst)
@@ -122,10 +152,17 @@ class KeyDataset(BaseDataset):
         for id in range(self.SP_input_nc):
             SP1[id] = (SP1_data == id).astype('float32')
         """
-        TXT1 = self.text_cap[P1_name]
+        # TXT1 = self.text_cap[P1_name]
+        TXT_13 = os.path.join(self.dir_TEXT, os.path.splitext(P1_name)[0] + '.pt')
+        Txt_Embeddings = torch.load(TXT_13)
         
-        return {'P1': P1, 'BP1': BP1, 'TXT1': TXT1, 'P2': P2, 'BP2': BP2,
+        
+        dict_return = {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
+                'P1_path': P1_name, 'P2_path': P2_name, 'CLIP_img_input': self.clip_tran(Image.open(P1_path))} if self.choice_txt_img else \
+                {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
                 'P1_path': P1_name, 'P2_path': P2_name}
+        
+        return dict_return # Test the CLIP image encoder effect
 
     def __len__(self):
         if self.opt.phase == 'train':

@@ -1,5 +1,9 @@
 from .base_options import BaseOptions
 
+def str2bool(string: str):
+    
+    return True if string == 'True' else False
+
 
 class TrainOptions(BaseOptions):
     def initialize(self):
@@ -36,7 +40,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--DG_ratio', type=int, default=1, help='how many times for D training after training G once')
 
         self.parser.add_argument('--use_cxloss', type=int, default=1, help='use cxloss or not')
-
-        
+        self.parser.add_argument('--choice_txt_img', type=str2bool, default=False, help='use CLIP text embeddings(False) or img embeddings')
+        self.parser.add_argument('--use_PCA', type=str2bool, default=False, help='use PCA to reduce the dimension of CLIP text embeddings')
 
         self.isTrain = True
