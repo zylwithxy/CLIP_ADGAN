@@ -20,8 +20,8 @@ class Visualizer():
             import visdom
             self.vis = visdom.Visdom(port=opt.display_port)
 
+        check_root = opt.checkpoints_dir
         if self.use_html:
-            check_root = opt.checkpoints_dir  
             self.web_dir = os.path.join(check_root, opt.name, 'web') # ./checkpoints_gpu012_new The root of file
             self.img_dir = os.path.join(self.web_dir, 'images')
             print('create web directory %s...' % self.web_dir)
@@ -36,6 +36,8 @@ class Visualizer():
 
     # |visuals|: dictionary of images to display or save
     def display_current_results(self, visuals, epoch, save_result, txt: str):
+        """As shown in the typing python codes. 
+        """
         visuals: dict[str, np.ndarray]; epoch: int; save_result: bool # shape: (height, width*5, 3)
         if self.display_id > 0:  # show images in the browser
             ncols = self.opt.display_single_pane_ncols
@@ -81,7 +83,7 @@ class Visualizer():
         if self.use_html and (save_result or not self.saved):  # save images to a html file
             self.saved = True
             for label, image_numpy in visuals.items():
-                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
+                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s_.png' % (epoch, label))
                 util.save_image(image_numpy, img_path, txt)
             # update website
             webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, reflesh=1)
@@ -126,7 +128,7 @@ class Visualizer():
             log_file.write('%s\n' % message)
 
     # save image to the disk
-    def save_images(self, webpage, visuals, image_path):
+    def save_images(self, webpage, visuals, image_path, text: str):
         image_dir = webpage.get_image_dir()
         short_path = ntpath.basename(image_path[0])
         name = os.path.splitext(short_path)[0]
@@ -140,7 +142,7 @@ class Visualizer():
             image_name = '%s_%s.jpg' % (image_path[0], label)
             save_path = os.path.join(image_dir, image_name)
             print(save_path)
-            util.save_image(image_numpy, save_path)
+            util.save_image(image_numpy, save_path, text)
 
             ims.append(image_name)
             txts.append(label)

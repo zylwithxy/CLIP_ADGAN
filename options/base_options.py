@@ -85,17 +85,25 @@ class BaseOptions():
             print('%s: %s' % (str(k), str(v)))
         print('-------------- End ----------------')
 
-        # save to the disk
+        # save to the disk, only for the training.
         check_root = self.opt.checkpoints_dir
-        if os.path.exists(check_root):
-            root_path = os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN/ADGAN')
-            fnum = len(glob.glob(os.path.join(root_path, 'check*'))) + 1
-            check_root = self.opt.checkpoints_dir + f'_{fnum}'
-            self.opt.checkpoints_dir = check_root
+        if self.isTrain:
+            if os.path.exists(check_root):
+                root_path = os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN/ADGAN')
+                fnum = len(glob.glob(os.path.join(root_path, 'check*'))) + 1
+                check_root = self.opt.checkpoints_dir + f'_{fnum}'
+                self.opt.checkpoints_dir = check_root
+        
+        if self.isTrain:
+            expr_dir = os.path.join(check_root, self.opt.name)
+            util.mkdirs(expr_dir)
+            file_name = os.path.join(expr_dir, 'opt.txt')
             
-        expr_dir = os.path.join(check_root, self.opt.name)
-        util.mkdirs(expr_dir)
-        file_name = os.path.join(expr_dir, 'opt.txt')
+        else: # For the test.py
+            if not os.path.exists(self.opt.results_dir):
+                os.makedirs(self.opt.results_dir)
+            file_name = os.path.join(self.opt.results_dir, 'opt.txt')
+            
         with open(file_name, 'wt') as opt_file:
             opt_file.write('------------ Options -------------\n')
             for k, v in sorted(args.items()):

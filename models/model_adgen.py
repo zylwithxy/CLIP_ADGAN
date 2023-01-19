@@ -8,10 +8,13 @@ from .vgg import VGG
 import os
 import torchvision.models.vgg as models
 
+def exists(val):
+    return val is not None
+
 # Moddfied with AdINGen
 class ADGen(nn.Module):
     # AdaIN auto-encoder architecture
-    def __init__(self, input_dim, dim, style_dim, n_downsample, n_res, mlp_dim, activ='relu', pad_type='reflect', use_PCA: bool= False):
+    def __init__(self, input_dim, dim, style_dim, n_downsample, n_res, mlp_dim, activ='relu', pad_type='reflect', prior_type: str= 'MLP', use_PCA: bool= False, ch_txt_img: bool = False):
         super(ADGen, self).__init__()
 
         # style encoder
@@ -32,8 +35,17 @@ class ADGen(nn.Module):
         
         # Dimension reduction module, which is used to reduce the (13, 512) dimensions to (1, 512)
         self.use_PCA = use_PCA
+        self.ch_txt_img = ch_txt_img
+        
         if not use_PCA:
             self.reduc_embeddings = nn.Conv1d(13, 1, 1)
+        
+        if prior_type == 'MLP':
+            self.prior_net = PriorNetworks(style_dim, style_dim, 'MLP', 4)
+        elif prior_type == 'None':
+            self.prior_net = None
+        else:
+            raise ValueError('The type of prior network does not exist!')
         
 
     def forward(self, img_A, img_B, input_TXT):
@@ -44,6 +56,7 @@ class ADGen(nn.Module):
             img_A (_type_): [b, 18, 256, 176]
             img_B (_type_): [b, 3, 256, 176]
             # sem_B (_type_): [b, 8, 256, 176]
+            input_TXT: if the input is text [b, 512] if self.use_PCA else [b, 13, 512]. else the type of input is CLIP image embeddings, shape is [b, 512]
             
 
         Returns:
@@ -53,17 +66,35 @@ class ADGen(nn.Module):
         content = self.enc_content(img_A) # [b,  256, 64, 44]
         # style = self.enc_style(img_B, sem_B)
         # style = self.fc(style.view(style.size(0), -1))
-        if self.use_PCA:
-            style = torch.unsqueeze(input_TXT, 2)
-            style = torch.unsqueeze(style, 3) # [b,  512, 1, 1]
+        if self.ch_txt_img:
+            style_temp = input_TXT # [b, 512]
+            style = torch.unsqueeze(style_temp, 2) # [b, 512, 1]
+            style = torch.unsqueeze(style, 3) # [b, 512, 1, 1]
         else:
-            style = self.reduc_embeddings(input_TXT) # [b, 1, 512]
-            style = style.transpose(1, 2).contiguous() # [b, 512, 1]
-            style = style.unsqueeze(-1) # [b, 512, 1, 1]
-
+            if self.use_PCA:
+                if exists(self.prior_net):
+                    style_temp = self.prior_net(input_TXT) # [b, 512] For the CLIP image and text loss
+                    style = torch.unsqueeze(style_temp, 2) # [b, 512, 1]
+                    style = torch.unsqueeze(style, 3) # [b, 512, 1, 1]
+                else:
+                    style = input_TXT
+                    style = style.unsqueeze(-1) # [b, 512, 1]
+                    style = style.unsqueeze(-1) # [b, 512, 1, 1]
+            else:
+                style = self.reduc_embeddings(input_TXT) # [b, 1, 512]
+                style = style.squeeze(1) # [b, 512]
+                if exists(self.prior_net):
+                    style_temp = self.prior_net(style) # [b, 512]
+                    style = style_temp.unsqueeze(-1) # [b, 512, 1]
+                    style = style.unsqueeze(-1) # [b, 512, 1, 1]
+                else:
+                    style = style.unsqueeze(-1) # [b, 512, 1]
+                    style = style.unsqueeze(-1) # [b, 512, 1, 1]   
+        
         images_recon = self.decode(content, style) # [b, 3, 256, 176]
-        import pdb; pdb.set_trace()
-        return images_recon
+        
+        return_tuple: tuple = (images_recon, style_temp) if exists(self.prior_net) else (images_recon, None)
+        return return_tuple
 
     def decode(self, content, style):
         # decode content and style codes to an image
@@ -482,3 +513,50 @@ class SpectralNorm(nn.Module):
         return self.module.forward(*args)
 
 
+class LinearBlock_Prior(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, enable_norm: bool, enable_activ: bool):
+        super().__init__()
+        self.fc = nn.Linear(input_dim, output_dim, bias= False)
+        self.norm = nn.BatchNorm1d(output_dim)
+        self.activ = nn.ReLU()
+        self.enable_norm = enable_norm
+        self.enable_activ = enable_activ
+    
+    def forward(self, x):
+        out = self.fc(x)
+        if self.enable_norm:
+            out = self.norm(out)
+        if self.enable_activ:
+            out = self.activ(out)
+        return out
+
+class PriorNetworks(nn.Module):
+    def __init__(self, input_dim: int, out_dim: int, type_model: str, num_layer: int):
+        """The type of prior networks
+
+        Args:
+            type_model (str): The type of prior networks. For instance, 'MLP'.
+            num_layer (int) : The number of layers of 'MLP'.
+        """
+        super().__init__()
+        
+        self.model = None
+        if type_model == 'MLP':
+            model = [LinearBlock_Prior(input_dim, out_dim, True, True)]
+        
+            for _ in range(num_layer-2):
+                model.append(LinearBlock_Prior(out_dim, out_dim, True, True))
+        
+            model.append(LinearBlock_Prior(out_dim, out_dim, False, False))
+        
+            self.model = nn.Sequential(*model)
+    
+    def forward(self, x: torch.Tensor):
+        """ The output is used to have loss with CLIP image embeddings.
+        Args:
+            x (torch.Tensor): The text embeddings of CLIP model.
+        """
+        if exists(self.model):
+            return self.model(x)
+        else:
+            raise ValueError('self.model does not exist')

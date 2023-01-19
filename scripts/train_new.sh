@@ -1,7 +1,7 @@
 python train.py --dataroot /media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_transfer_codes/deepfashion/fashion_resize \
                 --dirSem /media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_transfer_codes/deepfashion \
                 --pairLst /media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_transfer_codes/deepfashion/deepmultimodal-resize-pairs-train.csv \
-                --name fashion_adgan_test \
+                --name DALLE2_img_text_PCA \
                 --model adgan \
                 --nThreads 4 \
                 --lambda_GAN 5 \
@@ -10,17 +10,17 @@ python train.py --dataroot /media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_tr
                 --dataset_mode keypoint \
                 --n_layers 3 \
                 --norm instance \
-                --batchSize 4 \
+                --batchSize 8 \
                 --pool_size 0 \
                 --resize_or_crop no \
-                --gpu_ids 0 \
+                --gpu_ids 2,1 \
                 --BP_input_nc 18 \
                 --SP_input_nc 8 \
                 --no_flip \
                 --which_model_netG ADGen \
                 --niter 50 \
                 --niter_decay 50 \
-                --checkpoints_dir ./checkpoints_gpu12_CLIP_13_text_PCA \
+                --checkpoints_dir ./checkpoints_gpu12_CLIP_13_text_PCA_DALLE2 \
                 --L1_type l1_plus_perL1 \
                 --n_layers_D 3 \
                 --with_D_PP 1 \
@@ -28,3 +28,7 @@ python train.py --dataroot /media/beast/WD2T/XUEYu/dataset_pose_transfer/Pose_tr
                 --display_id 0 \
                 --choice_txt_img False \
                 --use_PCA True \
+                --display_freq 400 \
+                --use_CLIP_img_txt_loss True \
+                --prior_type MLP \
+                --lambda_CLIP 1 \

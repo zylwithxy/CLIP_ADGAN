@@ -62,15 +62,19 @@ class KeyDataset(BaseDataset):
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') # Densepoints
         self.dir_TEXT = os.path.join(opt.dataroot, opt.phase + '_text') # 13 CLIP text embeddings
+        self.dir_TEXT_PCA = os.path.join(opt.dataroot, opt.phase + '_text' + '_pca') # dim: [13*40(520) -> 512] CLIP text embeddings extracted by PCA.
+        
         self.dir_SP = opt.dirSem #semantic deepfashion path
         self.SP_input_nc = opt.SP_input_nc
         self.gpu_ids = opt.gpu_ids
-        self.choice_txt_img = opt.choice_txt_img
+        self.choice_txt_img = opt.choice_txt_img # True means choosing CLIP image encoder.
+        self.use_PCA = opt.use_PCA
+        self.use_CLIP_img_txt_loss = opt.use_CLIP_img_txt_loss # True means using the CLIP image and text loss.
         
         # text_caption = Read_MultiModel_Captions()
         # self.text_cap: dict[str, str] = text_caption.captions_adgan
 
-        self.init_categories(opt.pairLst) # deepmultimodal-resize-pairs-train.csv
+        self.init_categories(opt.pairLst) # deepmultimodal-resize-pairs-train(test).csv
         self.transform = get_transform(opt)
         self.clip_tran = self.clip_transform(224)
         # _, preprocess = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')
@@ -143,6 +147,7 @@ class KeyDataset(BaseDataset):
             P2 = self.transform(P2_img)
 
         # segmentation ; we don't use the segmentation map.
+        
         """
         SP1_name = self.split_name(P1_name, 'semantic_merge3') # 按位置分割选中 semantic_merge3 对应的pic
         SP1_path = os.path.join(self.dir_SP, SP1_name)
@@ -152,15 +157,23 @@ class KeyDataset(BaseDataset):
         for id in range(self.SP_input_nc):
             SP1[id] = (SP1_data == id).astype('float32')
         """
+        
         # TXT1 = self.text_cap[P1_name]
-        TXT_13 = os.path.join(self.dir_TEXT, os.path.splitext(P1_name)[0] + '.pt')
-        Txt_Embeddings = torch.load(TXT_13)
         
-        
-        dict_return = {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
-                'P1_path': P1_name, 'P2_path': P2_name, 'CLIP_img_input': self.clip_tran(Image.open(P1_path))} if self.choice_txt_img else \
-                {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
-                'P1_path': P1_name, 'P2_path': P2_name}
+        if self.choice_txt_img:
+            dict_return = {'P1': P1, 'BP1': BP1, 'P2': P2, 'BP2': BP2,
+                           'P1_path': P1_name, 'P2_path': P2_name, 'CLIP_img_input': self.clip_tran(Image.open(P1_path))} 
+        else:
+            suffix = '.pt'*2 if self.opt.phase == 'train' else '.pt'
+            TXT_13 = os.path.join(self.dir_TEXT, os.path.splitext(P1_name)[0] + '.pt') if not self.use_PCA else os.path.join(self.dir_TEXT_PCA, os.path.splitext(P1_name)[0] + suffix)
+            Txt_Embeddings: torch.Tensor = torch.load(TXT_13)
+            
+            if self.use_CLIP_img_txt_loss:
+                dict_return = {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
+                               'P1_path': P1_name, 'P2_path': P2_name, 'CLIP_img_input': self.clip_tran(Image.open(P1_path))}
+            else:
+                dict_return = {'P1': P1, 'BP1': BP1, 'TXT1': Txt_Embeddings, 'P2': P2, 'BP2': BP2,
+                               'P1_path': P1_name, 'P2_path': P2_name}
         
         return dict_return # Test the CLIP image encoder effect
 

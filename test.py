@@ -6,6 +6,7 @@ from models.models import create_model
 from util.visualizer import Visualizer
 from util import html
 import time
+from tqdm import tqdm
 
 opt = TestOptions().parse()
 opt.nThreads = 1   # test code only supports nThreads = 1
@@ -29,21 +30,24 @@ model = model.eval()
 print(model.training)
 
 opt.how_many = 999999
+pbar = tqdm(total= len(dataset))
+
 # test
 for i, data in enumerate(dataset):
-    print(' process %d/%d img ..'%(i,opt.how_many))
+    # print(' process %d/%d img ..'%(i,opt.how_many))
     if i >= opt.how_many:
         break
     model.set_input(data)
     startTime = time.time()
     model.test()
     endTime = time.time()
-    print(endTime-startTime)
-    visuals = model.get_current_visuals()
+    # print(endTime-startTime)
+    visuals, texts = model.get_current_visuals()
     img_path = model.get_image_paths()
     img_path = [img_path]
-    print(img_path)
-    visualizer.save_images(webpage, visuals, img_path)
+    # print(img_path)
+    visualizer.save_images(webpage, visuals, img_path, texts)
+    pbar.update(opt.batchSize)
 
 webpage.save()
 

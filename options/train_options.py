@@ -27,6 +27,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for perceptual L1 loss')
         self.parser.add_argument('--lambda_GAN', type=float, default=5.0, help='weight of GAN loss')
         self.parser.add_argument('--lambda_cx', type=float, default=0.1, help='weight of CX loss')
+        self.parser.add_argument('--lambda_CLIP', type=float, default=1, help='weight of CLIP image and text loss')
 
         self.parser.add_argument('--pool_size', type=int, default=50, help='the size of image buffer that stores previously generated images')
         self.parser.add_argument('--no_html', action='store_true', help='do not save intermediate training results to [opt.checkpoints_dir]/[opt.name]/web/')
@@ -42,5 +43,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--use_cxloss', type=int, default=1, help='use cxloss or not')
         self.parser.add_argument('--choice_txt_img', type=str2bool, default=False, help='use CLIP text embeddings(False) or img embeddings')
         self.parser.add_argument('--use_PCA', type=str2bool, default=False, help='use PCA to reduce the dimension of CLIP text embeddings')
-
+        self.parser.add_argument('--prior_type', type= str, default= 'MLP', help='Type for the prior network, there are MLP..., None means we do not want a prior network')
+        self.parser.add_argument('--use_CLIP_img_txt_loss', type=str2bool, default=False, help='Use CLIP image and text loss')
+        
         self.isTrain = True

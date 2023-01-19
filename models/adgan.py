@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import os
 from collections import OrderedDict
 from torch.autograd import Variable
@@ -16,7 +17,6 @@ from .vgg import VGG
 import sys
 sys.path.append('..')
 import clip
-from sklearn.decomposition import SparsePCA
 
 class TransferModel(BaseModel):
     def name(self):
@@ -36,9 +36,10 @@ class TransferModel(BaseModel):
         input_nc = [opt.P_input_nc, opt.BP_input_nc+opt.BP_input_nc]
         self.netG = networks.define_G(input_nc, opt.P_input_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids,
-                                        n_downsampling=opt.G_n_downsampling, use_PCA= opt.use_PCA)
+                                        n_downsampling=opt.G_n_downsampling, use_PCA= opt.use_PCA, opt_prior_type= opt.prior_type, opt_choice_txt_img= opt.choice_txt_img)
         self.choice = opt.choice_txt_img
         self.use_PCA = opt.use_PCA
+        self.use_CLIP_img_txt_loss = opt.use_CLIP_img_txt_loss
 
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
@@ -100,6 +101,8 @@ class TransferModel(BaseModel):
                 if torch.cuda.is_available():
                     self.vgg.cuda()
 
+            self.clip_img_txt_loss = nn.MSELoss(reduction='mean') # define loss functions for CLIP image embeddings and text embeddings.
+            
             # initialize optimizers
             self.optimizer_G = torch.optim.Adam(filter(lambda p: p.requires_grad, self.netG.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
 
@@ -130,9 +133,6 @@ class TransferModel(BaseModel):
         print('-----------------------------------------------')
         
         self.attr_embedder, _ = clip.load("ViT-B/32", device= 'cuda' if self.gpu_ids else 'cpu')
-        # PCA cannot be implemented correctly.
-        self.pca_class_partial = SparsePCA(n_components= 40, random_state=0) # Each component (b, 1, 512) in (b, 13, 512) -> (b, 1, 40)
-        self.pca_class_overall = SparsePCA(n_components= 512, random_state=0) # (b, 520) -> (b, 512) 
 
     def set_input(self, input:dict):
         """_summary_
@@ -152,10 +152,11 @@ class TransferModel(BaseModel):
 
         #input_SP1 = input['SP1']
         # self.input_SP1_set.resize_(input_SP1.size()).copy_(input_SP1)
-        self.input_TXT1 = input['TXT1'] if not self.use_PCA else input['TXT1'].float().numpy() # str. just the text; tensors. 13 attributes
+        if not self.choice:
+            self.input_TXT1: torch.Tensor = input['TXT1'] if not self.use_PCA else input['TXT1'].float() # if not self.use_PCA; tensors. 13 attributes
         
-        if self.choice:
-            self.input_IMG1 = input['CLIP_img_input'].cuda() if self.gpu_ids else input['CLIP_img_input']  
+        if self.choice or self.use_CLIP_img_txt_loss:
+            self.input_IMG1 = input['CLIP_img_input'].cuda() if self.gpu_ids else input['CLIP_img_input']
         
         self.image_paths = input['P1_path'][0] + '___' + input['P2_path'][0]
         self.person_paths = input['P1_path'][0]
@@ -175,15 +176,17 @@ class TransferModel(BaseModel):
                 style_code = self.input_TXT1.float().to(torch.device(f'cuda:{self.gpu_ids[0]}'))
             else:
                 # assert self.input_TXT1.__class__.__name__ == 'ndarray'
-                style_code = [self.pca_class_partial.fit_transform(self.input_TXT1[:, i, :]) for i in np.arange(13)]
-                style_code = self.pca_class_overall.fit_transform((np.concatenate(style_code, axis= 1)))
-                style_code = torch.from_numpy(style_code).cuda()
+                style_code = self.input_TXT1.cuda() # shape torch.Size([b, 512])
+            
+            if self.use_CLIP_img_txt_loss:
+                style_img = self.attr_embedder.encode_image(self.input_IMG1)
+                style_img = style_img.float()
             
         else:
             style_code = self.attr_embedder.encode_image(self.input_IMG1)
             style_code = style_code.float()
 
-        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, style_code)
+        self.fake_p2, self.style_prior = self.netG(self.input_BP2, self.input_P1, style_code)
 
 
 
@@ -195,8 +198,12 @@ class TransferModel(BaseModel):
         self.input_BP2 = Variable(self.input_BP2_set)
 
         # self.input_SP1 = Variable(self.input_SP1_set)
-
-        self.fake_p2 = self.netG(self.input_BP2, self.input_P1, self.input_SP1)
+        if self.choice:
+            style_code = self.attr_embedder.encode_image(self.input_IMG1).float()
+        else:
+            style_code = self.input_TXT1.float().cuda()
+        
+        self.fake_p2, _ = self.netG(self.input_BP2, self.input_P1, style_code)
 
 
     # get image paths
@@ -228,6 +235,10 @@ class TransferModel(BaseModel):
             cx_style_loss *= self.opt.lambda_cx
 
         pair_cxloss = cx_style_loss
+        
+        if self.use_CLIP_img_txt_loss:
+            clip_img_txt_loss = self.clip_img_txt_loss(self.style_prior, self.attr_embedder.encode_image(self.input_IMG1).float())
+            clip_img_txt_loss *= self.opt.lambda_CLIP
 
         # L1 loss
         if self.opt.L1_type == 'l1_plus_perL1' :
@@ -258,6 +269,9 @@ class TransferModel(BaseModel):
 
         if self.opt.use_cxloss:
             pair_loss = pair_loss + pair_cxloss
+            
+        if self.use_CLIP_img_txt_loss:
+            pair_loss += clip_img_txt_loss
 
         pair_loss.backward()
 
@@ -267,6 +281,9 @@ class TransferModel(BaseModel):
 
         if self.opt.use_cxloss:
             self.pair_cxloss = pair_cxloss.data
+        
+        if self.use_CLIP_img_txt_loss:
+            self.clip_loss_result = clip_img_txt_loss.data
 
 
     def backward_D_basic(self, netD, real, fake):
@@ -338,7 +355,10 @@ class TransferModel(BaseModel):
 
         if self.opt.use_cxloss:
             ret_errors['CXLoss'] = self.pair_cxloss
-
+        
+        if self.use_CLIP_img_txt_loss:
+            ret_errors['CLIP_img_txt_Loss'] = self.clip_loss_result
+            
         return ret_errors
 
     def get_current_visuals(self):
@@ -358,7 +378,9 @@ class TransferModel(BaseModel):
         vis[:, width*3:width*4, :] = input_BP2
         vis[:, width*4:, :] = fake_p2
 
-        ret_visuals = OrderedDict([('vis', vis)])
+        temp = os.path.splitext(self.person_paths)[0]
+        key = temp[7:]
+        ret_visuals = OrderedDict([(key, vis)])
         
         text = 'Image embeddings' if self.choice else '13 Attributes'
 

@@ -126,7 +126,7 @@ def get_scheduler(optimizer, opt):
 
 
 def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, init_type='normal',
-             gpu_ids=[], n_downsampling=2, use_PCA= False):
+             gpu_ids=[], n_downsampling=2, use_PCA= False, opt_prior_type: str = 'MLP', opt_choice_txt_img:bool = False):
     netG = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
@@ -147,7 +147,8 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         style_dim = 512
         n_res =8
         mlp_dim = 256
-        netG = ADGen(input_nc, ngf, style_dim, n_downsampling, n_res, mlp_dim, use_PCA= use_PCA)
+        prior_type = opt_prior_type
+        netG = ADGen(input_nc, ngf, style_dim, n_downsampling, n_res, mlp_dim, prior_type= prior_type ,use_PCA= use_PCA, ch_txt_img = opt_choice_txt_img)
     elif which_model_netG == 'AdaGen_SS_mix':
         style_dim = 512
         n_res = 8

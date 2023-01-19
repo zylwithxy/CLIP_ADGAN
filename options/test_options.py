@@ -1,5 +1,5 @@
 from .base_options import BaseOptions
-
+from .train_options import str2bool
 
 class TestOptions(BaseOptions):
     def initialize(self):
@@ -11,4 +11,8 @@ class TestOptions(BaseOptions):
         self.parser.add_argument('--which_epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         self.parser.add_argument('--how_many', type=int, default=200, help='how many test images to run')
 
+        self.parser.add_argument('--choice_txt_img', type=str2bool, default=False, help='use CLIP text embeddings(False) or img embeddings')
+        self.parser.add_argument('--use_PCA', type=str2bool, default=False, help='use PCA to reduce the dimension of CLIP text embeddings')
+        self.parser.add_argument('--prior_type', type= str, default= 'MLP', help='Type for the prior network, there are MLP..., None means we do not want a prior network')
+        self.parser.add_argument('--use_CLIP_img_txt_loss', type=str2bool, default=False, help='Use CLIP image and text loss')
         self.isTrain = False
