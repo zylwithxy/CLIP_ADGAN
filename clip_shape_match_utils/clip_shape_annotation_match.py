@@ -3,6 +3,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import sys
+sys.path.append(os.path.expanduser('~/XUEYu/pose_transfer/CLIP_ADGAN/ADGAN'))
 import clip
 from tqdm import tqdm
 from typing import List
@@ -23,6 +25,10 @@ def read_img(P1_name: str) -> Image.Image:
     input_P1_path = os.path.join(dir_path, P1_name)
     
     P1_img = Image.open(input_P1_path).convert('RGB')
+    
+    plt.imshow(P1_img)
+    plt.axis('off')
+    plt.show()
     
     return P1_img
 
@@ -76,8 +82,9 @@ def read_img_and_mask(input_P1_name: str, choice: str):
     
     # import pdb; pdb.set_trace()
     img_PIL = Image.fromarray(imgs[5]) # Which is clothes images and extracted by segmentation map.
-    # plt.imshow(img_PIL)
-    # plt.show()
+    plt.imshow(img_PIL)
+    plt.axis('off')
+    plt.show()
     
     return img_PIL
 
@@ -467,8 +474,8 @@ def show_pise_clip_spl2(input_P1_name: str):
     SPL2_tensor_mask = torch.zeros_like(SPL2_tensor,dtype= SPL2_tensor.dtype) # Create mask
     SPL2_tensor_mask.copy_(SPL2_tensor.data)
     
-    SPL2_tensor_mask[SPL2_tensor_mask == 3] = 0
-    SPL2_tensor_mask[SPL2_tensor_mask == 6] = 0
+    SPL2_tensor_mask[SPL2_tensor_mask == 3] = 0 # For upper clothing
+    # SPL2_tensor_mask[SPL2_tensor_mask == 6] = 0 # For arms
     
     image_numpy = tensor2im(SPL2_tensor, need_dec= True) # The full segmentation map
     image_numpy_mask = tensor2im(SPL2_tensor_mask, need_dec= True)
@@ -516,5 +523,6 @@ if __name__ == "__main__":
     # process_seg_map(input_P1_name)
     # filter_seg_map(input_P1_name)
     # test_pise_SPL(input_P1_name)
-    # show_pise_clip_spl2(input_P1_name)
-    convert_segmentation_map(input_P1_name)
+    show_pise_clip_spl2(input_P1_name)
+    # convert_segmentation_map(input_P1_name)
+    # read_img_and_mask(input_P1_name, choice)

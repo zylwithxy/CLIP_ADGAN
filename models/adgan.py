@@ -207,7 +207,7 @@ class TransferModel(BaseModel):
 
 
     # get image paths
-    def get_image_paths(self):
+    def get_image_paths(self) -> str:
         return self.image_paths
 
     def get_person_paths(self):
@@ -378,8 +378,9 @@ class TransferModel(BaseModel):
         vis[:, width*3:width*4, :] = input_BP2
         vis[:, width*4:, :] = fake_p2
 
-        temp = os.path.splitext(self.person_paths)[0]
-        key = temp[7:]
+        # temp = os.path.splitext(self.person_paths)[0]
+        # key = temp[7:]
+        key = self.get_image_paths()
         ret_visuals = OrderedDict([(key, vis)])
         
         text = 'Image embeddings' if self.choice else '13 Attributes'
